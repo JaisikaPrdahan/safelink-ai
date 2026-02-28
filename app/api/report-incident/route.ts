@@ -49,12 +49,46 @@ export async function POST(req: Request) {
       );
     }
 
-    if (incidentType === "intrusion") {
-      return NextResponse.json({
-        message: "Intrusion alert triggered",
-        affectedCount: 1,
-      });
-    }
+    // ✅ UPDATED INTRUSION BLOCK ONLY
+    // ✅ INTRUSION PROPAGATION WITH ORIGIN FLAG
+if (incidentType === "intrusion") {
+
+  // Fetch all households
+  const { data: allHouseholds } = await supabase
+    .from("households")
+    .select("*");
+
+  if (!allHouseholds) {
+    return NextResponse.json({ error: "Households not found" }, { status: 500 });
+  }
+
+  const radiusMeters = 120;
+
+  const alertRows = allHouseholds
+    .map((house) => {
+      const dx = (house.longitude - origin.longitude) * 111320;
+      const dy = (house.latitude - origin.latitude) * 110540;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      if (distance <= radiusMeters) {
+        return {
+          incident_id: incident.incident_id,
+          node_id: house.node_id,
+          confirmed: house.node_id === originNodeId, // 🔥 mark origin
+        };
+      }
+
+      return null;
+    })
+    .filter(Boolean);
+
+  await supabase.from("alerts").insert(alertRows);
+
+  return NextResponse.json({
+    message: "Intrusion alert propagated",
+    affectedCount: alertRows.length,
+  });
+}
 
     const severityConfig: Record<number, { risk: number; decay: number }> = {
       1: { risk: 40, decay: 0.6 },

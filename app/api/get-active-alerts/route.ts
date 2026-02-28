@@ -7,13 +7,48 @@ const supabase = createClient(
 );
 
 export async function GET() {
-  const { data } = await supabase
-    .from("alerts")
-    .select(`
-      node_id,
-      incidents!inner(status, incident_type, severity)
-    `)
-    .eq("incidents.status", "active");
+  try {
+    const { data: activeIncidents, error: incidentError } = await supabase
+      .from("incidents")
+      .select("*")
+      .eq("status", "active");
 
-  return NextResponse.json(data ?? []);
+    if (incidentError) {
+      console.error("INCIDENT FETCH ERROR:", incidentError);
+      return NextResponse.json([]);
+    }
+
+    if (!activeIncidents || activeIncidents.length === 0) {
+      return NextResponse.json([]);
+    }
+
+    const incidentIds = activeIncidents.map(i => i.incident_id);
+
+    const { data: alerts, error: alertError } = await supabase
+      .from("alerts")
+      .select("*")
+      .in("incident_id", incidentIds);
+
+    if (alertError) {
+      console.error("ALERT FETCH ERROR:", alertError);
+      return NextResponse.json([]);
+    }
+
+    const merged = alerts.map(alert => {
+      const incident = activeIncidents.find(
+        i => i.incident_id === alert.incident_id
+      );
+
+      return {
+        node_id: alert.node_id,
+        confirmed: alert.confirmed,
+        incidents: incident ? [incident] : [],
+      };
+    });
+
+    return NextResponse.json(merged);
+  } catch (err) {
+    console.error("SERVER ERROR:", err);
+    return NextResponse.json([]);
+  }
 }

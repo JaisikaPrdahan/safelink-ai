@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
+import { motion } from "framer-motion";
 
 const MapView = dynamic(() => import("./components/MapView"), {
   ssr: false,
@@ -28,9 +29,24 @@ export default function Home() {
 
   useEffect(() => {
     const fetchCount = async () => {
-      const res = await fetch("/api/get-burning-cells");
-      const cells = await res.json();
-      setLiveCount(Array.isArray(cells) ? cells.length : 0);
+      try {
+        const [cellsRes, alertsRes] = await Promise.all([
+          fetch("/api/get-burning-cells"),
+          fetch("/api/get-active-alerts"),
+        ]);
+
+        const cells = await cellsRes.json();
+        const alerts = await alertsRes.json();
+
+        const burningCount = Array.isArray(cells) ? cells.length : 0;
+        const intrusionActive =
+          Array.isArray(alerts) && alerts.length > 0;
+
+        setLiveCount(burningCount + (intrusionActive ? 1 : 0));
+      } catch (err) {
+        console.error("Status count error:", err);
+        setLiveCount(0);
+      }
     };
 
     fetchCount();
@@ -91,131 +107,153 @@ export default function Home() {
   const isSafe = liveCount === 0;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#2d1e60] via-[#3b1f7a] to-[#0f1025] text-white p-8">
+    <motion.div
+      initial={{ opacity: 0, y: 30 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+      className="h-screen w-screen overflow-hidden bg-gradient-to-br from-[#1e1b4b] via-[#2e1065] to-[#0f0c29] text-white"
+    >
+      <div className="h-full flex flex-col">
 
-      {/* HEADER */}
-      <div className="flex justify-between items-center mb-8">
-        <div className="px-6 py-3 bg-white/10 backdrop-blur-md rounded-xl border border-white/20">
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-300 to-pink-400 bg-clip-text text-transparent">
-            SafeLink AI
-          </h1>
-        </div>
-
-        <div className={`px-6 py-2 rounded-full text-sm font-semibold border transition-all ${
-          isSafe
-            ? "bg-green-500/20 text-green-300 border-green-400 shadow-green-500/30 shadow-lg"
-            : "bg-red-500/20 text-red-300 border-red-400 shadow-red-500/30 shadow-lg"
-        }`}>
-          ● NEIGHBORHOOD STATUS: {isSafe ? "SAFE" : "INCIDENT ACTIVE"}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-4 gap-6">
-
-        {/* SIDEBAR */}
-        <div className="col-span-1 bg-white/10 backdrop-blur-xl rounded-2xl p-6 border border-white/20 shadow-xl space-y-6">
-
-          <div>
-            <label className="text-sm text-gray-300 mb-2 block">
-              🔥 Select Tower
-            </label>
-            <select
-              className="w-full bg-white/10 text-white p-2 rounded-lg border border-white/20 appearance-none focus:outline-none"
-              style={{ colorScheme: "light" }}
-              value={selectedNode}
-              onChange={(e) => setSelectedNode(e.target.value)}
-            >
-              <option className="text-black bg-white" value="">
-                -- Select Tower --
-              </option>
-              {households.map((house, index) => (
-                <option
-                  key={house.node_id}
-                  value={house.node_id}
-                  className="text-black bg-white"
-                >
-                  Tower {index + 1}
-                </option>
-              ))}
-            </select>
+        {/* HEADER */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.3 }}
+          className="flex justify-between items-center px-8 py-6"
+        >
+          <div className="px-6 py-3 bg-white/5 backdrop-blur-xl rounded-2xl border border-white/10 shadow-[0_0_40px_rgba(139,92,246,0.2)]">
+            <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-300 to-pink-400 bg-clip-text text-transparent">
+              SafeLink AI
+            </h1>
           </div>
 
-          <div>
-            <label className="text-sm text-gray-300 mb-2 block">
-              🚨 Incident Type
-            </label>
-            <select
-              className="w-full bg-white/10 text-white p-2 rounded-lg border border-white/20 appearance-none focus:outline-none"
-              style={{ colorScheme: "light" }}
-              value={incidentType}
-              onChange={(e) => setIncidentType(e.target.value)}
-            >
-              <option className="text-black bg-white" value="fire">Fire</option>
-              <option className="text-black bg-white" value="gas">Gas Leak</option>
-              <option className="text-black bg-white" value="intrusion">Intrusion</option>
-            </select>
-          </div>
+          <motion.div
+            animate={
+              !isSafe
+                ? {
+                    boxShadow: [
+                      "0 0 10px rgba(239,68,68,0.5)",
+                      "0 0 30px rgba(239,68,68,0.8)",
+                      "0 0 10px rgba(239,68,68,0.5)",
+                    ],
+                  }
+                : {}
+            }
+            transition={{ repeat: Infinity, duration: 2 }}
+            className={`px-6 py-2 rounded-full text-sm font-semibold border ${
+              isSafe
+                ? "bg-green-500/20 text-green-300 border-green-400"
+                : "bg-red-500/20 text-red-300 border-red-400"
+            }`}
+          >
+            ● NEIGHBORHOOD STATUS: {isSafe ? "SAFE" : "INCIDENT ACTIVE"}
+          </motion.div>
+        </motion.div>
 
-          {incidentType !== "intrusion" && (
+        <div className="flex-1 grid grid-cols-[380px_1fr] gap-6 px-8 pb-8 h-full">
+
+          {/* SIDEBAR */}
+          <motion.div
+            whileHover={{ y: -4 }}
+            transition={{ type: "spring", stiffness: 120, damping: 18 }}
+            className="bg-white/5 backdrop-blur-2xl rounded-3xl p-6 border border-white/10 shadow-[0_0_60px_rgba(139,92,246,0.2)] space-y-6"
+          >
             <div>
               <label className="text-sm text-gray-300 mb-2 block">
-                ⚡ Severity
+                🔥 Select Tower
               </label>
               <select
-                className="w-full bg-white/10 text-white p-2 rounded-lg border border-white/20 appearance-none focus:outline-none"
-                style={{ colorScheme: "light" }}
-                value={severity}
-                onChange={(e) => setSeverity(Number(e.target.value))}
+                className="w-full bg-white/10 text-white p-3 rounded-xl border border-white/20 focus:outline-none"
+                value={selectedNode}
+                onChange={(e) => setSelectedNode(e.target.value)}
               >
-                <option className="text-black bg-white" value={1}>Low</option>
-                <option className="text-black bg-white" value={2}>Medium</option>
-                <option className="text-black bg-white" value={3}>High</option>
+                <option className="text-black bg-white" value="">
+                  -- Select Tower --
+                </option>
+                {households.map((house, index) => (
+                  <option
+                    key={house.node_id}
+                    value={house.node_id}
+                    className="text-black bg-white"
+                  >
+                    Tower {index + 1}
+                  </option>
+                ))}
               </select>
             </div>
-          )}
 
-          <div className="space-y-3 pt-4">
-            <button
-              onClick={triggerIncident}
-              className="w-full py-2 rounded-lg bg-gradient-to-r from-red-500 to-pink-500 hover:scale-105 transition"
-            >
-              🚨 Trigger Incident
-            </button>
+            <div>
+              <label className="text-sm text-gray-300 mb-2 block">
+                🚨 Incident Type
+              </label>
+              <select
+                className="w-full bg-white/10 text-white p-3 rounded-xl border border-white/20 focus:outline-none"
+                value={incidentType}
+                onChange={(e) => setIncidentType(e.target.value)}
+              >
+                <option className="text-black bg-white" value="fire">Fire</option>
+                <option className="text-black bg-white" value="gas">Gas Leak</option>
+                <option className="text-black bg-white" value="intrusion">Intrusion</option>
+              </select>
+            </div>
 
-            <button
-              onClick={expandRisk}
-              className="w-full py-2 rounded-lg bg-gradient-to-r from-yellow-500 to-orange-500 hover:scale-105 transition"
-            >
-              📈 Expand Risk
-            </button>
+            {incidentType !== "intrusion" && (
+              <div>
+                <label className="text-sm text-gray-300 mb-2 block">
+                  ⚡ Severity
+                </label>
+                <select
+                  className="w-full bg-white/10 text-white p-3 rounded-xl border border-white/20 focus:outline-none"
+                  value={severity}
+                  onChange={(e) => setSeverity(Number(e.target.value))}
+                >
+                  <option className="text-black bg-white" value={1}>Low</option>
+                  <option className="text-black bg-white" value={2}>Medium</option>
+                  <option className="text-black bg-white" value={3}>High</option>
+                </select>
+              </div>
+            )}
 
-            <button
-              onClick={resolveIncident}
-              className="w-full py-2 rounded-lg bg-gradient-to-r from-green-500 to-emerald-500 hover:scale-105 transition"
-            >
-              ✅ Resolve Incident
-            </button>
+            <div className="space-y-4 pt-4">
+              {[
+                { text: "🚨 Trigger Incident", action: triggerIncident, color: "from-red-500 to-pink-500" },
+                { text: "📈 Expand Risk", action: expandRisk, color: "from-yellow-500 to-orange-500" },
+                { text: "✅ Resolve Incident", action: resolveIncident, color: "from-green-500 to-emerald-500" },
+                { text: "🔄 Reset", action: resetSimulation, color: "from-gray-500 to-gray-600" },
+              ].map((btn, i) => (
+                <motion.button
+                  key={i}
+                  whileHover={{ scale: 1.03 }}
+                  whileTap={{ scale: 0.96 }}
+                  transition={{ type: "spring", stiffness: 220 }}
+                  onClick={btn.action}
+                  className={`w-full py-3 rounded-xl bg-gradient-to-r ${btn.color}`}
+                >
+                  {btn.text}
+                </motion.button>
+              ))}
+            </div>
 
-            <button
-              onClick={resetSimulation}
-              className="w-full py-2 rounded-lg bg-white/20 hover:bg-white/30 transition"
-            >
-              🔄 Reset
-            </button>
-          </div>
+            <div className="mt-6 bg-white/5 rounded-2xl p-6 text-center border border-white/10">
+              <p className="text-xs text-gray-400 tracking-wider">
+                ACTIVE RISK CELLS
+              </p>
+              <p className="text-4xl font-bold mt-2">{liveCount}</p>
+            </div>
+          </motion.div>
 
-          <div className="mt-6 bg-white/10 rounded-xl p-4 text-center border border-white/20">
-            <p className="text-xs text-gray-300">ACTIVE RISK CELLS</p>
-            <p className="text-3xl font-bold mt-1">{liveCount}</p>
-          </div>
-        </div>
+          {/* MAP */}
+          <motion.div
+            whileHover={{ scale: 1.01 }}
+            transition={{ type: "spring", stiffness: 80 }}
+            className="h-full min-h-[600px] rounded-3xl overflow-hidden border border-white/10 shadow-[0_0_80px_rgba(139,92,246,0.15)]"
+          >
+            <MapView />
+          </motion.div>
 
-        {/* MAP AREA */}
-        <div className="col-span-3 bg-white/10 backdrop-blur-xl rounded-2xl border border-white/20 shadow-2xl overflow-hidden relative">
-
-          <MapView />
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }

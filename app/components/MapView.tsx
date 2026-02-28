@@ -23,11 +23,14 @@ type Household = {
 
 type Alert = {
   node_id: string;
-  incidents: {
-    status: string;
-    incident_type: string;
-    severity: number;
-  };
+  confirmed?: boolean; // ✅ needed for origin detection
+  incidents:
+    | {
+        status: string;
+        incident_type: string;
+        severity: number;
+      }[]
+    | null;
 };
 
 type BurningCell = {
@@ -98,8 +101,8 @@ export default function MapView() {
   return (
     <MapContainer
       center={center}
-      zoom={17} 
-      style={{ height: "600px", width: "100%" }}
+      zoom={17}
+      className="h-full w-full"
     >
       <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
 
@@ -111,7 +114,7 @@ export default function MapView() {
           pathOptions={{
             color: "red",
             fillColor: "red",
-            fillOpacity: 0.3, // ✅ stronger visibility
+            fillOpacity: 0.3,
             weight: 0,
           }}
         />
@@ -158,8 +161,18 @@ export default function MapView() {
 
         let color = "green";
 
-        if (alert?.incidents?.incident_type === "intrusion") {
-          color = "purple";
+        // ✅ CORRECTED INTRUSION LOGIC
+        if (
+          alert?.incidents &&
+          Array.isArray(alert.incidents) &&
+          alert.incidents.length > 0 &&
+          alert.incidents[0].incident_type === "intrusion"
+        ) {
+          if (alert.confirmed) {
+            color = "purple"; // origin node
+          } else {
+            color = "yellow"; // neighboring nodes
+          }
         } else if (maxFireRisk > 75) {
           color = "red";
         } else if (maxFireRisk > 45) {
@@ -172,7 +185,7 @@ export default function MapView() {
           <CircleMarker
             key={house.node_id}
             center={position}
-            radius={8} 
+            radius={8}
             pathOptions={{
               color,
               fillColor: color,
@@ -180,37 +193,47 @@ export default function MapView() {
             }}
           >
             <Popup>
-              <div style={{ minWidth: "160px" }}>
-                <strong>Tower {index + 1}</strong>
-                <br />
-                Node ID: {house.node_id.slice(0, 8)}...
-                <br />
+  <div style={{ minWidth: "160px" }}>
+    <strong>Tower {index + 1}</strong>
+    <br />
+    Node ID: {house.node_id.slice(0, 8)}...
+    <br />
 
-                {maxFireRisk > 0 && (
-                  <>
-                    <br />
-                    🔥 Risk Level:{" "}
-                    <strong>{Math.round(maxFireRisk)}</strong>
-                  </>
-                )}
+    {/* 🔥 FIRE / GAS INCIDENT DISPLAY */}
+    {maxFireRisk > 0 && (
+      <>
+        <br />
+        🚨 Incident: <strong>Environmental Threat</strong>
+        <br />
+        🔥 Risk Level: <strong>{Math.round(maxFireRisk)}</strong>
+      </>
+    )}
 
-                {alert ? (
-                  <>
-                    <br />
-                    🚨 Incident:{" "}
-                    <strong>{alert.incidents.incident_type}</strong>
-                    <br />
-                    ⚠ Severity:{" "}
-                    <strong>{alert.incidents.severity}</strong>
-                  </>
-                ) : (
-                  <>
-                    <br />
-                    ✅ No Active Incident
-                  </>
-                )}
-              </div>
-            </Popup>
+    {/* 🟣 INTRUSION DISPLAY */}
+    {alert?.incidents &&
+      Array.isArray(alert.incidents) &&
+      alert.incidents.length > 0 &&
+      alert.incidents[0].incident_type === "intrusion" && (
+        <>
+          <br />
+          🚨 Incident: <strong>Intrusion</strong>
+          <br />
+          ⚠ Severity:{" "}
+          <strong>{alert.incidents[0].severity}</strong>
+        </>
+      )}
+
+    {/* ✅ SAFE STATE */}
+    {maxFireRisk === 0 &&
+      (!alert?.incidents ||
+        alert.incidents.length === 0) && (
+        <>
+          <br />
+          ✅ No Active Incident
+        </>
+      )}
+  </div>
+</Popup>
           </CircleMarker>
         );
       })}
